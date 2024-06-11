@@ -33,6 +33,12 @@ class SignalServer {
   int _frequency = 65; // Default frequency in milliseconds
   List<List<double>> _dataArrays = [[], []];
 
+  StreamController<String> dataBufferController = StreamController();
+
+  Stream<String> get dataBuffer => dataBufferController.stream;
+
+  StreamSubscription? dataBufferSubscription;
+
   final List<WebSocketChannel> _clients = [];
 
   void handleWebSocketMessage(WebSocketChannel ws) {
@@ -43,8 +49,16 @@ class SignalServer {
 
         if (decodedMessage['type'] == 'settings') {
           _updateSettings(decodedMessage['settings']);
-        } else if (decodedMessage['type'] == 'stream') {
-          _handleData(decodedMessage['data']);
+        } else if (decodedMessage['type'] == 'stream_start') {
+          _timer?.cancel();
+          _timer = null;
+          dataBufferSubscription ??= dataBufferController.stream.listen((data) {
+            ws.sink.add(data);
+          });
+        } else if (decodedMessage['type'] == 'stream_data') {
+          final List<double> ecg = decodedMessage['ecg_data'].cast<double>();
+          final List<double> ppg = decodedMessage['ppg_data'].cast<double>();
+          _handleData(ecg, ppg);
         } else if (decodedMessage['type'] == 'manual') {
           _updateMode(decodedMessage['mode']);
         }
@@ -71,12 +85,14 @@ class SignalServer {
     if (settings.containsKey('period')) {
       _period = settings['period'];
     }
+
+    print('Change settings: $settings');
   }
 
-  void _handleData(List<List<double>> dataArrays) {
-    _dataArrays = dataArrays;
-    _sinusMode = false;
-    _restartTimer();
+  void _handleData(List<double> ecgData, List<double> ppgData) {
+    for (var pair in zip(ecgData, ppgData)) {
+      dataBufferController.add('${pair[0]},${pair[1]}');
+    }
   }
 
   void _updateMode(String mode) {
@@ -94,11 +110,6 @@ class SignalServer {
         var message = '$sinValue,$cosValue,$sinValue';
         _broadcast(message);
         _counter++;
-      } else {
-        for (var i = 0; i < _dataArrays[0].length; i++) {
-          var message = '${_dataArrays[0][i]},${_dataArrays[1][i]},0';
-          _broadcast(message);
-        }
       }
     });
   }
@@ -136,4 +147,11 @@ void main(List<String> args) async {
   final port = int.parse(Platform.environment['PORT'] ?? '8080');
   final server = await serve(handler, ip, port);
   print('Server listening on port ${server.port}');
+}
+
+Iterable<List<T>> zip<T>(List<T> a, List<T> b) sync* {
+  int length = a.length < b.length ? a.length : b.length;
+  for (int i = 0; i < length; i++) {
+    yield [a[i], b[i]];
+  }
 }
