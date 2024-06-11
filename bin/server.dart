@@ -52,6 +52,7 @@ class SignalServer {
         } else if (decodedMessage['type'] == 'stream_start') {
           _timer?.cancel();
           _timer = null;
+          dataBufferSubscription?.cancel();
           dataBufferSubscription ??= dataBufferController.stream.listen((data) {
             ws.sink.add(data);
           });
