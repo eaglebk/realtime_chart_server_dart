@@ -57,8 +57,8 @@ class SignalServer {
             ws.sink.add(data);
           });
         } else if (decodedMessage['type'] == 'stream_data') {
-          final List<double> ecg = decodedMessage['ecg_data'].cast<double>();
-          final List<double> ppg = decodedMessage['ppg_data'].cast<double>();
+          final List<int> ecg = decodedMessage['ecg_data'].cast<int>();
+          final List<int> ppg = decodedMessage['ppg_data'].cast<int>();
           _handleData(ecg, ppg);
         } else if (decodedMessage['type'] == 'manual') {
           _updateMode(decodedMessage['mode']);
@@ -90,8 +90,9 @@ class SignalServer {
     print('Change settings: $settings');
   }
 
-  void _handleData(List<double> ecgData, List<double> ppgData) {
+  void _handleData(List<num> ecgData, List<num> ppgData) {
     for (var pair in zip(ecgData, ppgData)) {
+      print('${pair[0]},${pair[1]}');
       dataBufferController.add('${pair[0]},${pair[1]}');
     }
   }
